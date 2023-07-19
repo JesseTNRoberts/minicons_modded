@@ -524,7 +524,7 @@ class MaskedLMScorer(LMScorer):
         return masked_tensors
 
     def prime_text(
-        self, preamble: Union[str, List[str]], stimuli: Union[str, List[str]]
+        self, preamble: Union[str, List[str]], stimuli: Union[str, List[str]], PLL_metric: Optional[str] = "within_word_l2r"
     ) -> Iterable[Any]:
         """
         Prepares a batch of input text into a format fit to run LM
@@ -536,7 +536,11 @@ class MaskedLMScorer(LMScorer):
 
         :param ``Union[str, List[str]]`` preamble: Batch of prefixes/prime/preambles on which the LM is conditioned.
         :param ``Union[str, List[str]]`` stimuli: Batch of continuations that are scored based on the conditioned text (provided in the ``preamble``). The positions of the elements match their counterparts in the ``preamble``.
-
+        :param PLL_metric: PLL scoring strategy to be used.
+            Options: `original` or `within_word_l2r`. Default: `within_word_l2r`
+            For motivation as to why to use `within_word_l2r` PLL scoring, see Kauf & Ivanova (2023):
+            https://arxiv.org/abs/2305.10588
+        
         :return: Batch of formatted input that can be passed to
             ``compute_stats``
         """
@@ -576,6 +580,7 @@ class MaskedLMScorer(LMScorer):
             token_ids = torch.tensor(token_ids)
             # final_lengths = len(token_ids) - 2
             attention_mask = torch.tensor(attention_mask)
+            word_ids = encoded.word_ids(batch_index=i)
 
             token_ids_masked_list = []
             attention_masked_list = []
@@ -591,9 +596,28 @@ class MaskedLMScorer(LMScorer):
             effective_length = len(effective_token_ids) + preamble_lens[i]
 
             mask_indices = []
-            mask_indices = [
+
+            # added kauf calculation as an option
+            assert PLL_metric in ["original", "within_word_l2r"], "PLL metric not supported"
+            if PLL_metric == "within_word_l2r":
+                """
+                Future tokens belonging to the same word as the target token are masked during token inference as well.
+                """
+                mask_indices = [
+                    [mask_pos] + [
+                        j for j in range(mask_pos + 1, effective_length + 1)
+                        if word_ids[j] == word_ids[mask_pos]
+                    ]
+                    if word_ids[mask_pos] is not None
+                    else [mask_pos]
+                    for mask_pos in range(preamble_lens[i], effective_length + 1)
+                ]
+
+            else: # Original PLL metric
+                mask_indices = [
                 [mask_pos] for mask_pos in range(preamble_lens[i], effective_length + 1)
             ]
+
 
             # We don't mask the [CLS], [SEP] for now for PLL
             mask_indices = mask_indices[:-1]
