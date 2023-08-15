@@ -1,12 +1,11 @@
-# minicons: Enabling Flexible Behavioral and Representational Analyses of Transformer Language Models
+This is an extention of the software in 
 
-[![Downloads](https://static.pepy.tech/personalized-badge/minicons?period=total&units=international_system&left_color=black&right_color=brightgreen&left_text=Downloads)](https://pepy.tech/project/minicons)
-
-This repo is a wrapper around the `transformers` [library](https://huggingface.co/transformers) from Hugging Face :hugs:
-
-<!-- TODO: Description-->
-
-
+@article{misra2022minicons,
+    title={minicons: Enabling Flexible Behavioral and Representational Analyses of Transformer Language Models},
+    author={Kanishka Misra},
+    journal={arXiv preprint arXiv:2203.13112},
+    year={2022}
+}
 
 ## Installation
 
