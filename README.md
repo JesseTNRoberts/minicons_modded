@@ -1,4 +1,4 @@
-This is an extention of the software in 
+This is an extention of the software from:
 
 @article{misra2022minicons,
     title={minicons: Enabling Flexible Behavioral and Representational Analyses of Transformer Language Models},
@@ -6,6 +6,8 @@ This is an extention of the software in
     journal={arXiv preprint arXiv:2203.13112},
     year={2022}
 }
+
+This extension corrects the MLM probability that is returned so that the kauf score (better pseudo-probability) may be returned with sequences when using preamble/target pairs.
 
 ## Installation
 
