@@ -326,8 +326,8 @@ class MaskedLMScorer(LMScorer):
         super(MaskedLMScorer, self).__init__(model_name, device)
 
         self.model = AutoModelForMaskedLM.from_pretrained(model_name, return_dict=True, **kwargs)
-        # self.model.to(self.device)
-        # self.model.eval()
+        self.model.to(self.device)
+        self.model.eval()
 
         # define CLS and SEP tokens
         self.bos_token_id = self.tokenizer.cls_token_id
@@ -993,8 +993,8 @@ class IncrementalLMScorer(LMScorer):
                 self.tokenizer.pad_token = "<|pad|>"
                 self.model.resize_token_embeddings(len(self.tokenizer))
 
-        # self.model.to(self.device)
-        # self.model.eval()
+        self.model.to(self.device)
+        self.model.eval()
 
         self.padding_side = self.tokenizer.padding_side
 
@@ -1565,8 +1565,8 @@ class Seq2SeqScorer(LMScorer):
             self.tokenizer.bos_token = "<|bos|>"
 
         self.model.resize_token_embeddings(len(self.tokenizer))
-        # self.model.to(self.device)
-        # self.model.eval()
+        self.model.to(self.device)
+        self.model.eval()
 
     def add_special_tokens(self, text: Union[str, List[str]]) -> Union[str, List[str]]:
         """
