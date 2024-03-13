@@ -14,6 +14,7 @@ from transformers import (
     AutoTokenizer,
 )
 from transformers.utils.logging import set_verbosity_error
+import accelerate
 
 from .utils import batch_wise_logprobs
 
@@ -311,7 +312,7 @@ class MaskedLMScorer(LMScorer):
     :type device: str, optional
     """
 
-    def __init__(self, model_name: str, device: Optional[str] = "cpu") -> None:
+    def __init__(self, model_name: str, device: Optional[str] = "cpu", **kwargs) -> None:
         """
         :param model_name: name of the model, should either be a path
             to a model (.pt or .bin file) stored locally, or a
@@ -324,9 +325,9 @@ class MaskedLMScorer(LMScorer):
         """
         super(MaskedLMScorer, self).__init__(model_name, device)
 
-        self.model = AutoModelForMaskedLM.from_pretrained(model_name, return_dict=True)
-        self.model.to(self.device)
-        self.model.eval()
+        self.model = AutoModelForMaskedLM.from_pretrained(model_name, return_dict=True, **kwargs)
+        # self.model.to(self.device)
+        # self.model.eval()
 
         # define CLS and SEP tokens
         self.bos_token_id = self.tokenizer.cls_token_id
@@ -966,7 +967,7 @@ class IncrementalLMScorer(LMScorer):
     :type device: str, optional
     """
 
-    def __init__(self, model_name: str, device: Optional[str] = "cpu") -> None:
+    def __init__(self, model_name: str, device: Optional[str] = "cpu", **kwargs) -> None:
         """
         :param model_name: name of the model, should either be a path
             to a model (.pt or .bin file) stored locally, or a
@@ -979,7 +980,7 @@ class IncrementalLMScorer(LMScorer):
         """
         super(IncrementalLMScorer, self).__init__(model_name, device)
 
-        self.model = AutoModelForCausalLM.from_pretrained(model_name, return_dict=True)
+        self.model = AutoModelForCausalLM.from_pretrained(model_name, return_dict=True, **kwargs)
 
         # define CLS and SEP tokens
         if self.tokenizer.pad_token is None:
@@ -992,8 +993,8 @@ class IncrementalLMScorer(LMScorer):
                 self.tokenizer.pad_token = "<|pad|>"
                 self.model.resize_token_embeddings(len(self.tokenizer))
 
-        self.model.to(self.device)
-        self.model.eval()
+        # self.model.to(self.device)
+        # self.model.eval()
 
         self.padding_side = self.tokenizer.padding_side
 
@@ -1535,7 +1536,7 @@ class Seq2SeqScorer(LMScorer):
     :type device: str, optional
     """
 
-    def __init__(self, model_name: str, device: Optional[str] = "cpu") -> None:
+    def __init__(self, model_name: str, device: Optional[str] = "cpu", **kwargs) -> None:
         """
         :param model_name: name of the model, should either be a path
             to a model (.pt or .bin file) stored locally, or a
@@ -1548,7 +1549,7 @@ class Seq2SeqScorer(LMScorer):
         """
         super(Seq2SeqScorer, self).__init__(model_name, device)
 
-        self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name, return_dict=True)
+        self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name, return_dict=True, **kwargs)
 
         # define CLS and SEP tokens
         if self.tokenizer.pad_token is None:
@@ -1564,8 +1565,8 @@ class Seq2SeqScorer(LMScorer):
             self.tokenizer.bos_token = "<|bos|>"
 
         self.model.resize_token_embeddings(len(self.tokenizer))
-        self.model.to(self.device)
-        self.model.eval()
+        # self.model.to(self.device)
+        # self.model.eval()
 
     def add_special_tokens(self, text: Union[str, List[str]]) -> Union[str, List[str]]:
         """
