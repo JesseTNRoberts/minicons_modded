@@ -27,7 +27,7 @@ class LMScorer:
     with methods to facilitate the analysis of language model output scores.
     """
 
-    def __init__(self, model_name: str, device: Optional[str] = "cpu") -> None:
+    def __init__(self, model_name: str, device: Optional[str] = "cpu", token=None) -> None:
         """
         :param model_name: name of the model, should either be a path
             to a model (.pt or .bin file) stored locally, or a
@@ -37,7 +37,7 @@ class LMScorer:
             options: `cpu or cuda:{0, 1, ...}`
         :type device: str, optional
         """
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True, token=token)
         self.device = device
         self.vocab = defaultdict(list)
         # {self.vocab[x.strip()].append(i) for x, i in [(self.tokenizer.decode([i]), i) for i in range(self.tokenizer.vocab_size)]}
@@ -312,7 +312,7 @@ class MaskedLMScorer(LMScorer):
     :type device: str, optional
     """
 
-    def __init__(self, model_name: str, device: Optional[str] = "cpu", **kwargs) -> None:
+    def __init__(self, model_name: str, device: Optional[str] = "cpu", token=None, **kwargs) -> None:
         """
         :param model_name: name of the model, should either be a path
             to a model (.pt or .bin file) stored locally, or a
@@ -325,7 +325,7 @@ class MaskedLMScorer(LMScorer):
         """
         super(MaskedLMScorer, self).__init__(model_name, device)
 
-        self.model = AutoModelForMaskedLM.from_pretrained(model_name, return_dict=True, **kwargs)
+        self.model = AutoModelForMaskedLM.from_pretrained(model_name, return_dict=True, token=token, **kwargs)
         self.model.to(self.device)
         self.model.eval()
 
@@ -967,7 +967,7 @@ class IncrementalLMScorer(LMScorer):
     :type device: str, optional
     """
 
-    def __init__(self, model_name: str, device: Optional[str] = "cpu", **kwargs) -> None:
+    def __init__(self, model_name: str, device: Optional[str] = "cpu", token=None, **kwargs) -> None:
         """
         :param model_name: name of the model, should either be a path
             to a model (.pt or .bin file) stored locally, or a
@@ -980,7 +980,7 @@ class IncrementalLMScorer(LMScorer):
         """
         super(IncrementalLMScorer, self).__init__(model_name, device)
 
-        self.model = AutoModelForCausalLM.from_pretrained(model_name, return_dict=True, **kwargs)
+        self.model = AutoModelForCausalLM.from_pretrained(model_name, return_dict=True, token=token, **kwargs)
 
         # define CLS and SEP tokens
         if self.tokenizer.pad_token is None:
@@ -1536,7 +1536,7 @@ class Seq2SeqScorer(LMScorer):
     :type device: str, optional
     """
 
-    def __init__(self, model_name: str, device: Optional[str] = "cpu", **kwargs) -> None:
+    def __init__(self, model_name: str, device: Optional[str] = "cpu", token=None, **kwargs) -> None:
         """
         :param model_name: name of the model, should either be a path
             to a model (.pt or .bin file) stored locally, or a
@@ -1549,7 +1549,7 @@ class Seq2SeqScorer(LMScorer):
         """
         super(Seq2SeqScorer, self).__init__(model_name, device)
 
-        self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name, return_dict=True, **kwargs)
+        self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name, return_dict=True, token=token, **kwargs)
 
         # define CLS and SEP tokens
         if self.tokenizer.pad_token is None:
