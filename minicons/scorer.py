@@ -1233,9 +1233,7 @@ class IncrementalLMScorer(LMScorer):
         Computes the cloze score for a selection of completion tokens. Input is expected to be
         a list of contexts and a 2-D list of completions, one completion list per context.
         """
-        print(targets)
         target_tokens = torch.stack([self.encode(t)['input_ids'] for t in targets]).squeeze().to(self.device)
-        print(target_tokens)
         if len(target_tokens.shape) > 2:
             raise NotImplementedError('Cloze score not defined for more than one token')
 
