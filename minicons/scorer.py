@@ -435,6 +435,55 @@ class MaskedLMScorer(LMScorer):
 
         return masked_logprobs
 
+    #TODO: Adapt to handle MLMs. Hopefully should just need to add a mask token
+    # at end and grab only that token's probs from output logits
+    def next_word_distribution(self, queries: List, surprisal: bool = False):
+        """
+        Returns the log probability distribution of the next word.
+        """
+        encoded = self.encode(queries)
+        encoded = encoded.to(self.device)
+        query_ids = [
+            [j for j, i in enumerate(instance) if i != self.tokenizer.pad_token_id][-1]
+            for instance in encoded["input_ids"].tolist()
+        ]
+
+        logits = self.model(**encoded).logits.detach()
+        logits[:, :, self.tokenizer.pad_token_id] = float("-inf")
+
+        logits = logits[torch.arange(len(query_ids)), query_ids]
+        logprobs = logits - logits.logsumexp(1).unsqueeze(1)
+
+        if surprisal:
+            logprobs = -1.0 * logprobs
+
+        return logprobs
+
+    def cloze_score(
+        self,
+        queries: List[str],
+        targets: List[List[str]],
+        surprisal: bool = False,
+        return_dist: bool = False
+    ) -> Union[List[List[float]], Tuple[List[List[float]], List[List[float]]]]:
+        """
+        Computes the cloze score for a selection of completion tokens. Input is expected to be
+        a list of contexts and a 2-D list of completions, one completion list per context.
+        """
+        #TODO: This should work for RoBERTa and all other BERT tokenizer LLMs. Should verify with non-BERT models
+        target_tokens = torch.stack([self.encode(t)['input_ids'][:,1] for t in targets]).squeeze().to(self.device)
+
+        if len(targets.shape) > 2:
+            raise NotImplementedError('Cloze score not defined for more than one token')
+
+        dists = self.next_word_distribution(queries, surprisal)
+        target_probs = torch.gather(dists, 1, targets).tolist()
+
+        if return_dist:
+            return target_probs, dists.tolist()
+        else:
+            return target_probs
+
     def prepare_text(self, text: Union[str, List[str]], PLL_metric: Optional[str] = "original") -> Iterable[Any]:
         """
         Prepares a batch of input text into a format fit to run MLM
@@ -1172,6 +1221,29 @@ class IncrementalLMScorer(LMScorer):
             logprobs = -1.0 * logprobs
 
         return logprobs
+
+    def cloze_score(
+        self,
+        queries: List[str],
+        targets: List[List[str]],
+        surprisal: bool = False,
+        return_dist: bool = False
+    ) -> Union[List[List[float]], Tuple[List[List[float]], List[List[float]]]]:
+        """
+        Computes the cloze score for a selection of completion tokens. Input is expected to be
+        a list of contexts and a 2-D list of completions, one completion list per context.
+        """
+        target_tokens = torch.stack([self.encode(t)['input_ids'] for t in targets]).squeeze().to(self.device)
+        if len(target_tokens.shape) > 2:
+            raise NotImplementedError('Cloze score not defined for more than one token')
+
+        dists = self.next_word_distribution(queries, surprisal)
+        target_probs = torch.gather(dists, 1, target_tokens).tolist()
+
+        if return_dist:
+            return target_probs, dists.tolist()
+        else:
+            return target_probs
 
     def compute_stats(
         self,
