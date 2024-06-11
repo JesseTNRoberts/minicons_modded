@@ -61,6 +61,27 @@ class LMScorer:
         """
         raise NotImplementedError
 
+    def strip_special_token_ids(self, encoded: torch.Tensor) -> torch.Tensor:
+        if len(encoded.shape) == 2:
+            return encoded
+
+        enc_list = encoded.tolist()
+        special_tokens_list = [
+            self.tokenizer.bos_token_id, 
+            self.tokenizer.eos_token_id, 
+            self.tokenizer.cls_token_id, 
+            self.tokenizer.sep_token_id, 
+            self.tokenizer.mask_token_id,
+            self.tokenizer.pad_token_id,
+            self.tokenizer.unk_token_id
+        ]
+
+        for b in range(len(enc_list)):
+            for i, c in enumerate(enc_list[b]):
+                enc_list[b][i] = [tok for tok in c if tok not in special_tokens_list]
+      
+        return torch.as_tensor(enc_list, dtype = encoded.dtype, device=self.device).squeeze()
+
     def cloze_score(
         self,
         queries: List[str],
@@ -71,13 +92,13 @@ class LMScorer:
         """
         Computes the cloze score for a selection of completion tokens. Input is expected to be
         a list of contexts and a 2-D list of completions, one completion list per context.
-
-        NOTE: Currently only tested for Causal LMs and BERT derivative Masked LM models
         """
         target_tokens = self.encode_cloze_targets(targets)
 
         if len(target_tokens.shape) > 2:
-            raise NotImplementedError('Cloze score not defined for more than one token')
+            target_tokens = self.strip_special_token_ids(target_tokens)
+            if len(target_tokens.shape) >2:
+                raise NotImplementedError('cloze_score not defined for more than one token per completion')
 
         dists = self.next_word_distribution(queries, surprisal)
         target_probs = torch.gather(dists, 1, target_tokens).tolist()
