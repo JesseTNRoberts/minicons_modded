@@ -52,6 +52,41 @@ class LMScorer:
     def distribution(self, batch: Iterable) -> torch.Tensor:
         raise NotImplementedError
 
+    def next_word_distribution(self, queries: List, surprisal: bool = False) -> torch.Tensor:
+        raise NotImplementedError
+
+    def encode_cloze_targets(self, targets: List[List[str]]) -> torch.Tensor:
+        """
+        Encodes the list of target tokens using self.tokenizer.
+        """
+        raise NotImplementedError
+
+    def cloze_score(
+        self,
+        queries: List[str],
+        targets: List[List[str]],
+        surprisal: bool = False,
+        return_dist: bool = False
+    ) -> Union[List[List[float]], Tuple[List[List[float]], List[List[float]]]]:
+        """
+        Computes the cloze score for a selection of completion tokens. Input is expected to be
+        a list of contexts and a 2-D list of completions, one completion list per context.
+
+        NOTE: Currently only tested for Causal LMs and BERT derivative Masked LM models
+        """
+        target_tokens = self.encode_cloze_targets(targets)
+
+        if len(target_tokens.shape) > 2:
+            raise NotImplementedError('Cloze score not defined for more than one token')
+
+        dists = self.next_word_distribution(queries, surprisal)
+        target_probs = torch.gather(dists, 1, target_tokens).tolist()
+
+        if return_dist:
+            return target_probs, dists.tolist()
+        else:
+            return target_probs
+
     def topk(self, distribution: torch.Tensor, k: int = 1) -> Tuple:
         top_k = distribution.topk(k)
 
@@ -435,54 +470,41 @@ class MaskedLMScorer(LMScorer):
 
         return masked_logprobs
 
-    #TODO: Adapt to handle MLMs. Hopefully should just need to add a mask token
-    # at end and grab only that token's probs from output logits
-    def next_word_distribution(self, queries: List, surprisal: bool = False):
+    def next_word_distribution(self, queries: List, surprisal: bool = False) -> torch.Tensor:
         """
         Returns the log probability distribution of the next word.
+
+        NOTE: Currently only tested for BERT derivative models
         """
-        encoded = self.encode(queries)
-        encoded = encoded.to(self.device)
-        query_ids = [
-            [j for j, i in enumerate(instance) if i != self.tokenizer.pad_token_id][-1]
-            for instance in encoded["input_ids"].tolist()
-        ]
+        modified_prompts = self.add_special_tokens([(q + self.tokenizer.mask_token) for q in queries])
 
-        logits = self.model(**encoded).logits.detach()
-        logits[:, :, self.tokenizer.pad_token_id] = float("-inf")
+        with torch.no_grad():
+            encoded = self.tokenizer(
+                modified_prompts, add_special_tokens=False, return_tensors="pt", padding=True
+            )
+            encoded = encoded.to(self.device)
 
-        logits = logits[torch.arange(len(query_ids)), query_ids]
-        logprobs = logits - logits.logsumexp(1).unsqueeze(1)
+            test = self.tokenizer(
+                [self.tokenizer.mask_token], add_special_tokens=False, return_tensors="pt", padding=True
+            )
+            test = test.to(self.device)
+
+            logits = self.model(**encoded)
+            #INFO: mask token will always be 3rd to last in BERT models. Test with non-BERT
+            presoftmax = logits.logits[torch.arange(len(queries)), -3]
+
+        logprobs = presoftmax - presoftmax.logsumexp(1).unsqueeze(1)
 
         if surprisal:
             logprobs = -1.0 * logprobs
 
         return logprobs
 
-    def cloze_score(
-        self,
-        queries: List[str],
-        targets: List[List[str]],
-        surprisal: bool = False,
-        return_dist: bool = False
-    ) -> Union[List[List[float]], Tuple[List[List[float]], List[List[float]]]]:
+    def encode_cloze_targets(self, targets: List[List[str]]) -> torch.Tensor:
         """
-        Computes the cloze score for a selection of completion tokens. Input is expected to be
-        a list of contexts and a 2-D list of completions, one completion list per context.
+        Encodes the list of target tokens using self.tokenizer.
         """
-        #TODO: This should work for RoBERTa and all other BERT tokenizer LLMs. Should verify with non-BERT models
-        target_tokens = torch.stack([self.encode(t)['input_ids'][:,1] for t in targets]).squeeze().to(self.device)
-
-        if len(targets.shape) > 2:
-            raise NotImplementedError('Cloze score not defined for more than one token')
-
-        dists = self.next_word_distribution(queries, surprisal)
-        target_probs = torch.gather(dists, 1, targets).tolist()
-
-        if return_dist:
-            return target_probs, dists.tolist()
-        else:
-            return target_probs
+        return torch.stack([self.encode(t)['input_ids'][:,1] for t in targets]).squeeze().to(self.device)
 
     def prepare_text(self, text: Union[str, List[str]], PLL_metric: Optional[str] = "original") -> Iterable[Any]:
         """
@@ -1200,7 +1222,7 @@ class IncrementalLMScorer(LMScorer):
             outputs.append(sent_logits[-1])
         return torch.stack(outputs, 0)
 
-    def next_word_distribution(self, queries: List, surprisal: bool = False):
+    def next_word_distribution(self, queries: List, surprisal: bool = False) -> torch.Tensor:
         """
         Returns the log probability distribution of the next word.
         """
@@ -1222,28 +1244,11 @@ class IncrementalLMScorer(LMScorer):
 
         return logprobs
 
-    def cloze_score(
-        self,
-        queries: List[str],
-        targets: List[List[str]],
-        surprisal: bool = False,
-        return_dist: bool = False
-    ) -> Union[List[List[float]], Tuple[List[List[float]], List[List[float]]]]:
+    def encode_cloze_targets(self, targets: List[List[str]]) -> torch.Tensor:
         """
-        Computes the cloze score for a selection of completion tokens. Input is expected to be
-        a list of contexts and a 2-D list of completions, one completion list per context.
+        Encodes the list of target tokens using self.tokenizer.
         """
-        target_tokens = torch.stack([self.encode(t)['input_ids'] for t in targets]).squeeze().to(self.device)
-        if len(target_tokens.shape) > 2:
-            raise NotImplementedError('Cloze score not defined for more than one token')
-
-        dists = self.next_word_distribution(queries, surprisal)
-        target_probs = torch.gather(dists, 1, target_tokens).tolist()
-
-        if return_dist:
-            return target_probs, dists.tolist()
-        else:
-            return target_probs
+        return torch.stack([self.encode(t)['input_ids'] for t in targets]).squeeze().to(self.device)
 
     def compute_stats(
         self,
