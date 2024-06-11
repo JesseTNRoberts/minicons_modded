@@ -80,7 +80,7 @@ class LMScorer:
             for i, c in enumerate(enc_list[b]):
                 enc_list[b][i] = [tok for tok in c if tok not in special_tokens_list]
       
-        return torch.as_tensor(enc_list, dtype = encoded.dtype, device=self.device).squeeze()
+        return torch.as_tensor(enc_list, dtype = encoded.dtype, device=self.device).squeeze(-1)
 
     def cloze_score(
         self,
@@ -525,7 +525,7 @@ class MaskedLMScorer(LMScorer):
         """
         Encodes the list of target tokens using self.tokenizer.
         """
-        return torch.stack([self.encode(t)['input_ids'][:,1] for t in targets]).squeeze().to(self.device)
+        return torch.stack([self.encode(t)['input_ids'][:,1] for t in targets]).squeeze(-1).to(self.device)
 
     def prepare_text(self, text: Union[str, List[str]], PLL_metric: Optional[str] = "original") -> Iterable[Any]:
         """
@@ -1269,7 +1269,7 @@ class IncrementalLMScorer(LMScorer):
         """
         Encodes the list of target tokens using self.tokenizer.
         """
-        return torch.stack([self.encode(t)['input_ids'] for t in targets]).squeeze().to(self.device)
+        return torch.stack([self.encode(t)['input_ids'] for t in targets]).squeeze(-1).to(self.device)
 
     def compute_stats(
         self,
